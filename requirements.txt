@@ -1,0 +1,6 @@
+discord.py==2.6.3
+gspread
+oauth2client
+python-dotenv
+fastapi
+uvicorn
