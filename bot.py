@@ -10,6 +10,9 @@ from discord.ui import Button, View
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials  
 
+import json
+import datetime
+
 load_dotenv()
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 SHEET_KEY = os.getenv('SHEET_KEY')
@@ -17,6 +20,7 @@ CREDENTIALS_FILE = 'credentials.json'
 GUILD_ID = 1417139813617893399
 VERIFY_CHANNEL_ID = 1417139814465273975
 UPDATE_CHANNEL_ID = 1417423373507498108
+MESSAGE_ID_FILE = 'message_id.json'
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -72,26 +76,74 @@ async def on_ready():
     print(f'Влязох като {bot.user}')
     guild = bot.get_guild(GUILD_ID)
 
+
     verify_channel = guild.get_channel(VERIFY_CHANNEL_ID)
     if verify_channel:
-        embed = discord.Embed(
+        old_msg_data = load_message_id("verify_message")
+        old_msg = None
+        delete_old = False
+
+        if old_msg_data:
+            msg_id = old_msg_data.get("id")
+            timestamp_str = old_msg_data.get("timestamp")
+            if msg_id and timestamp_str:
+                try:
+                    old_msg = await verify_channel.fetch_message(msg_id)
+                    ts = datetime.datetime.fromisoformat(timestamp_str)
+                    if (datetime.datetime.utcnow() - ts) > datetime.timedelta(days=365):
+                        delete_old = True
+                except discord.NotFound:
+                    old_msg = None
+
+        if delete_old and old_msg:
+            await old_msg.delete()
+            old_msg = None
+
+        if old_msg:
+            print("🔄 Старото съобщение за верификация е намерено.")
+        else:
+         embed = discord.Embed(
             title="Верификация на нови членове",
             description="Натисни бутона по-долу, за да започнеш процеса на верификация и получиш достъп до сървъра.",
             color=discord.Color.green()
-        )
-        embed.set_footer(text="Ботът автоматично ще създаде частен канал за теб.")
-        
-        await verify_channel.send(embed=embed, view=VerificationView())
+         )
+         embed.set_footer(text="Ботът автоматично ще създаде частен канал за теб.")
+         new_msg = await verify_channel.send(embed=embed, view=VerificationView())
+         save_message_id("verify_message", new_msg)
+         print("📌 Изпратено е ново съобщение за верификация.")
 
     update_channel = guild.get_channel(UPDATE_CHANNEL_ID)
     if update_channel:
-        embed = discord.Embed(
+        old_msg_data = load_message_id("update_message")
+        old_msg = None
+        delete_old = False
+
+        if old_msg_data:
+            msg_id = old_msg_data.get("id")
+            timestamp_str = old_msg_data.get("timestamp")
+            if msg_id and timestamp_str:
+                try:
+                    old_msg = await update_channel.fetch_message(msg_id)
+                    ts = datetime.datetime.fromisoformat(timestamp_str)
+                    if (datetime.datetime.utcnow() - ts) > datetime.timedelta(days=365):
+                        delete_old = True
+                except discord.NotFound:
+                    old_msg = None
+
+        if delete_old and old_msg:
+            await old_msg.delete()
+            old_msg = None
+        if old_msg:
+            print("🔄 Старото съобщение за update е намерено.")
+        else:
+         embed = discord.Embed(
             title=" Актуализиране",
             description="Натисни бутона по-долу, за да актуализираш статуса си.",
             color=discord.Color.red()
-        )
-
-        await update_channel.send(embed=embed, view=UpdateView())
+         )
+         new_msg = await update_channel.send(embed=embed, view=UpdateView())
+         save_message_id("update_message", new_msg)
+         print("📌 Изпратено е ново съобщение за update.")
     
 
 @bot.event
@@ -101,7 +153,6 @@ async def on_interaction(interaction: discord.Interaction):
         guild = interaction.guild
 
         if interaction.data.get("custom_id") == "verify_button":
-            
 
             overwrites = {
                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -149,7 +200,11 @@ async def on_interaction(interaction: discord.Interaction):
                 return
              
             await private_channel.send("✅ Телефонът е намерен. Верифициран сте!")
-            
+            guest_role = discord.utils.get(guild.roles, name="Гост")
+            verified_role = discord.utils.get(guild.roles, name="Верифициран")
+            await user.add_roles(verified_role)
+            await user.remove_roles(guest_role)
+
             full_name = row.get("Име и фамилия")
             if full_name:
                 try:
@@ -191,13 +246,37 @@ async def on_interaction(interaction: discord.Interaction):
                     if verified:  
                         await user.add_roles(member_role)
                         await user.remove_roles(candidate_role)
-                        await interaction.followup.send("🔵 Ролите ти бяха актуализирани. Вече си **член**!")
+                        await interaction.followup.send("🔵 Ролите ти бяха актуализирани. Вече си **член**!",
+                        ephemeral=True                                
+                        )
                     else:
                         await user.add_roles(candidate_role)
                         await user.remove_roles(member_role)
-                        await interaction.followup.send("🔴 Ролите ти бяха актуализирани. Вече си **кандидат-член**!")
+                        await interaction.followup.send("🔴 Ролите ти бяха актуализирани. Вече си **кандидат-член**!",
+                        ephemeral=True                                
+                        )
                     return
 
+def save_message_id(key, message):
+    data = {}
+    try:
+        with open(MESSAGE_ID_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
 
+    data[key] = {"id": message.id,
+                 "timestamp": datetime.datetime.utcnow().isoformat()
+     }
 
+    with open(MESSAGE_ID_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f)         
+
+def load_message_id(key):
+    try:
+        with open(MESSAGE_ID_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get(key)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
 bot.run(DISCORD_TOKEN)
