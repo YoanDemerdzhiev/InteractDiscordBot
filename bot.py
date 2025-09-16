@@ -131,7 +131,8 @@ async def on_interaction(interaction: discord.Interaction):
                 await private_channel.delete()
                 return
             
-            verified = row.get("Официален член")  
+            value = str(row.get("Официален член") or "").strip().upper()
+            verified = value == "TRUE"
             member_role = discord.utils.get(guild.roles, name="Член")
             candidate_role = discord.utils.get(guild.roles, name="Кандидат-член")
 
