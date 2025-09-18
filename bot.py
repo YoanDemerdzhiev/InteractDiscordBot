@@ -13,7 +13,12 @@ from oauth2client.service_account import ServiceAccountCredentials
 import json
 import datetime
 
+import requests
+
+
+
 load_dotenv()
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 SHEET_KEY = os.getenv('SHEET_KEY')
 CREDENTIALS_FILE = 'credentials.json'
@@ -50,16 +55,39 @@ def normalize_phone(p: str) -> str:
 
     return digits
 
-def find_in_sheet(phone: str):
+def run_pub_sync():
+    try:
+        res = requests.get(WEBHOOK_URL)
+        res.raise_for_status()  # raises an HTTPError if status != 200–299
+
+        print("✅ Success:", res.text)
+
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ HTTP error: {e.response.status_code} - {e.response.text}")
+    except requests.exceptions.RequestException as e:
+        # catches timeouts, connection errors, etc.
+        print(f"❌ Request failed: {e}")    
+
+def check_phone_exists_in_sheet(phone_normalized: str) -> bool:
     sheet = get_sheet()
     records = sheet.get_all_records()
-    phone_norm = normalize_phone(phone)
 
     for row in records:
         row_phone = normalize_phone(row.get('Телефон за контакт'))
-        if row_phone == phone_norm:
+        if row_phone == phone_normalized:
             return True, row
     return False, None
+
+
+def find_in_sheet(phone: str):
+    phone_norm = normalize_phone(phone)
+    found, row = check_phone_exists_in_sheet(phone_norm)
+
+    if found:
+        return True, row
+    
+    run_pub_sync()
+    return check_phone_exists_in_sheet(phone_norm)
 
 class VerificationView(View):
     def __init__(self):
