@@ -181,6 +181,8 @@ async def on_interaction(interaction: discord.Interaction):
         guild = interaction.guild
 
         if interaction.data.get("custom_id") == "verify_button":
+            
+            await interaction.response.defer(ephemeral=True)
 
             overwrites = {
                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -192,7 +194,7 @@ async def on_interaction(interaction: discord.Interaction):
                 f"verification-{user.name}", overwrites=overwrites
             )
 
-            await interaction.response.send_message(
+            await interaction.followup.send(
             "✅ Създадох частен канал за верификацията ти!", 
             ephemeral=True
             )
@@ -260,8 +262,12 @@ async def on_interaction(interaction: discord.Interaction):
             await private_channel.send("⏳ Каналът ще се затвори след 30 секунди.")
             await asyncio.sleep(30)
             await private_channel.delete()
+
         elif interaction.data.get("custom_id") == "update_button":
-            await interaction.response.send_message(
+
+            await interaction.response.defer(ephemeral=True)
+
+            await interaction.followup.send(
                 "🔄 Стартирам актуализация на ролите ти...", ephemeral=True
             )
             sheet = get_sheet()
