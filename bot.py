@@ -192,7 +192,10 @@ async def on_interaction(interaction: discord.Interaction):
             
             found, row = find_in_sheet(phone)
             if not found:
-                await private_channel.send("❌ Телефонът не е намерен.")
+                await private_channel.send(
+                            f"❌ Телефонът не е намерен.\n"
+                            f"Моля попълнете формуляр тук: <#{1417430628038737940}>"
+                        )
                 await asyncio.sleep(5)
                 await private_channel.send("⏳ Каналът ще се затвори след 30 секунди.")
                 await asyncio.sleep(30)
@@ -236,8 +239,12 @@ async def on_interaction(interaction: discord.Interaction):
             sheet = get_sheet()
             records = sheet.get_all_records()
             member = guild.get_member(user.id)
+
+            found = False
+
             for row in records:
                 if member.nick and  member.nick == row.get("Име и фамилия"):
+                    found = True
                     value = str(row.get("Официален член") or "").strip().upper()
                     verified = value == "TRUE"
                     member_role = discord.utils.get(guild.roles, name="Член")
@@ -256,6 +263,13 @@ async def on_interaction(interaction: discord.Interaction):
                         ephemeral=True                                
                         )
                     return
+            if not found:
+                await asyncio.sleep(60)
+                await interaction.followup.send(
+                    "❌ Не можах да намеря информация за теб и да те актуализирам. "
+                    "Моля свържи се с администратор.",
+                    ephemeral=True
+                )
 
 def save_message_id(key, message):
     data = {}
