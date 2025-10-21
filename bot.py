@@ -50,7 +50,7 @@ def normalize_phone(p: str) -> str:
     elif digits.startswith("00359") and len(digits) > 5:
             digits = "0" + digits[5:]
 
-    elif len(digits) == 9 and digits.startswith("8"):
+    elif len(digits) == 9:
             digits = "0" + digits
 
     return digits
